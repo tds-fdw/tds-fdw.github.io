@@ -1,0 +1,41 @@
+#!/bin/bash
+ROOTDIR="${PWD}"
+KEY="41C307F49E416BBF"
+URL="https://tds-fdw.github.io"
+YUMDIR="yum"
+
+sign_packages() {
+  cd ${1}
+  for RPM in $(ls); do
+    echo "********* Signing ${1}/${RPM}"
+    rpmsign --key-id "${KEY}" --addsign ${RPM}
+  done
+  cd ${ROOTDIR}
+}
+
+echo "#### Export GPG key..."
+gpg --export -a "${KEY}" > ${YUMDIR}/RPM-GPG-KEY-tds_fdw
+
+echo "#### Sign x86_64 packages..."
+sign_packages ${YUMDIR}/x86_64
+
+echo "#### Sign src packages..."
+sign_packages ${YUMDIR}/src
+
+echo "#### Run create repo..."
+createrepo_c ${YUMDIR}/
+
+echo "#### Signing metadata..."
+rm ${YUMDIR}/repodata/repomd.xml.asc
+gpg -u "${KEY}" --detach-sign --armor yum/repodata/repomd.xml
+
+echo "### Creating .repo file"
+cat >yum/tds_fdw.repo <<EOT
+[tds_fdw]
+name=tds_fdw
+baseurl=${URL}/yum/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=${URL}/yum/RPM-GPG-KEY-tds_fdw
+EOT
